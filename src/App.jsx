@@ -1,3 +1,5 @@
+const SUPABASE_URL = 'https://auxmfksrjqbsrcliswfl.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1eG1ma3NyanFic3JjbGlzd2ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNjcwNTMsImV4cCI6MjA4OTk0MzA1M30.PXliWOIPbXeU9rTCmfxWv4eRPlsznVbhMHDSK01dNk8'
 import { useState, useEffect } from "react";
 
 // ── 브랜드 컬러 ──────────────────────────────────────────────────────────────
@@ -1064,31 +1066,49 @@ export default function App() {
   useEffect(()=>{ if(view==='admin') loadResp(); },[view]);
 
   async function loadResp() {
-    try {
-      const r = await window.storage.list('ace_survey:',true);
-      if(!r?.keys?.length){ setAllResp([]); return; }
-      const arr = await Promise.all(
-        r.keys.map(async k=>{
-          try{
-            const v=await window.storage.get(k,true);
-            return v?JSON.parse(v.value):null;
-          }catch{return null;}
-        })
-      );
-      setAllResp(arr.filter(Boolean).sort((a,b)=>b.id-a.id));
-    } catch{ setAllResp([]); }
+  try {
+    // Supabase에서 모든 응답을 최신순으로 불러옵니다.
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/responses?select=*&order=created_at.desc`,
+      {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`
+        }
+      }
+    );
+    const rows = await res.json();
+    // 각 행의 data 필드(JSON)를 꺼내서 배열로 만듭니다.
+    setAllResp(rows.map(r => ({ id: r.id, ...r.data })));
+  } catch {
+    setAllResp([]);
   }
+}
 
-  async function submit() {
-    const id=Date.now();
-    const entry={id,submittedAt:new Date().toLocaleString('ko-KR'),...form};
-    try{
-      await window.storage.set(`ace_survey:${id}`,JSON.stringify(entry),true);
-      setView('thanks');
-    }catch(e){
-      alert('제출 중 오류가 발생했습니다. 다시 시도해 주세요.');
-    }
+ async function submit() {
+  const entry = { 
+    submittedAt: new Date().toLocaleString('ko-KR'), 
+    ...form 
+  };
+  try {
+    // Supabase의 responses 테이블에 데이터를 삽입합니다.
+    // fetch는 브라우저 내장 API라 별도 설치가 필요 없습니다.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/responses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ data: entry })
+    });
+    if (!res.ok) throw new Error('저장 실패');
+    setView('thanks');
+  } catch (e) {
+    alert('제출 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
   }
+}
 
   function toggleCheck(field,val){
     setForm(f=>({
