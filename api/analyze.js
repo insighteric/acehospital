@@ -1,13 +1,16 @@
 export default async function handler(req, res) {
-  // POST 요청만 허용
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const { summary } = req.body;
-
   if (!summary) {
     return res.status(400).json({ error: 'summary가 없습니다' });
+  }
+
+  // API 키 확인
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'API 키가 설정되지 않았습니다. Vercel 환경변수를 확인해 주세요.' });
   }
 
   try {
@@ -28,13 +31,18 @@ export default async function handler(req, res) {
       })
     });
 
-    const data = await response.json();
-
+    // 오류 응답을 텍스트로 읽어서 명확하게 표시
     if (!response.ok) {
-      return res.status(response.status).json({ error: data });
+      const errorText = await response.text();
+      return res.status(response.status).json({
+        error: `Anthropic API 오류 (${response.status}): ${errorText}`
+      });
     }
 
-    return res.status(200).json({ result: data.content?.[0]?.text || '분석 결과 없음' });
+    const data = await response.json();
+    return res.status(200).json({
+      result: data.content?.[0]?.text || '분석 결과 없음'
+    });
 
   } catch (error) {
     return res.status(500).json({ error: error.message });
