@@ -747,28 +747,37 @@ export default function App() {
   }
 
   async function runAI() {
-    if(!allResp.length) return;
-    setIsAnal(true); setAiAnal('');
-    const summary = allResp.map((r,i)=>
-      `[응답${i+1}] 부서:${r.dept} | 직책:${r.position} | AI수준:${r.q3} | 자동화희망:${r.q7?.join(',')} | 우려:${r.q8?.join(',')} | TOP3:${r.q5?.filter(Boolean).join('/')} | 교육:${r.q9} | 의견:${r.q11}`
-    ).join('\n');
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{role:'user', content:
-            `에이스병원 AI 도입 설문 응답 분석. 한국어로 답변:\n\n1️⃣ 부서별 핵심 Pain Point\n2️⃣ AI 즉시 도입 권장 TOP 3 (이유 포함)\n3️⃣ 가장 많이 요청된 AI 기능 순위\n4️⃣ 교육 방향 제안\n5️⃣ 한 줄 총평\n\n응답 데이터:\n${summary}`
-          }]
-        })
-      });
-      const data = await res.json();
-      setAiAnal(data.content?.[0]?.text || '분석 실패');
-    } catch(e) { setAiAnal('분석 중 오류: ' + e.message); }
-    setIsAnal(false);
+  if (!allResp.length) return;
+  setIsAnal(true);
+  setAiAnal('');
+
+  // 응답 데이터를 텍스트로 요약
+  const summary = allResp.map((r, i) =>
+    `[응답${i+1}] 부서:${r.dept} | 직책:${r.position} | AI수준:${r.q3} | 자동화희망:${r.q7?.join(',')} | 우려:${r.q8?.join(',')} | TOP3:${r.q5?.filter(Boolean).join('/')} | 교육:${r.q9} | 의견:${r.q11}`
+  ).join('\n');
+
+  try {
+    // Anthropic API 직접 호출 대신 → Vercel 서버 함수를 통해 호출
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || '서버 오류');
+    }
+
+    setAiAnal(data.result);
+
+  } catch (e) {
+    setAiAnal('분석 중 오류: ' + e.message);
   }
+
+  setIsAnal(false);
+}
 
   function countChoices(field, choices) {
     return choices.map(c=>({ label:c, count:allResp.filter(r=>r[field]?.includes(c)).length }))
